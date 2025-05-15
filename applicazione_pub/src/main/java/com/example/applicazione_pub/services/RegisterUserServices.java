@@ -7,53 +7,64 @@ import com.example.applicazione_pub.repositories.IRoleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
+
 
 @Service
 public class RegisterUserServices {
 
-    @Autowired
-    IRegisterUserRepository registerUserRepository;
+
+    private final IRegisterUserRepository registerUserRepository;
+    private final EmailService emailService;
+    private final IRoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
-    EmailService emailService;
-
-    @Autowired
-    IRoleRepository roleRepository;
-
-    @Autowired
-    PasswordEncoder passwordEncoder;
+    public RegisterUserServices(IRegisterUserRepository registerUserRepository, EmailService emailService, IRoleRepository roleRepository, PasswordEncoder passwordEncoder){
+        this.registerUserRepository = registerUserRepository;
+        this.emailService = emailService;
+        this.roleRepository = roleRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
 
     public RegisterUser sendRegistration(RegisterUser registerUser){
 
+        //Recupera il ruolo predefinito da assegnare all'utente
         Role defaultRole = roleRepository.findByRoleName("ROLE_USER")
-                .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+                .orElseThrow(() -> new RuntimeException(
+                        "Errore: Ruole non trovato"
+                ));
 
-        Set<Role> role = new HashSet<>();
-        role.add(defaultRole);
+        Set<Role> roles = new HashSet<>();
+        roles.add(defaultRole);
 
+        //Crea nuovo utente con i dati forniti
         RegisterUser registeredUser = new RegisterUser(
                 registerUser.getName(),
                 registerUser.getSurname(),
                 registerUser.getEmail(),
                 passwordEncoder.encode(registerUser.getPassword()),
                 false,
-                role
+                roles
         );
 
-        registerUserRepository.save(registeredUser);
+        //Salva l'utente nel database
+        registerUserRepository.save(registerUser);
 
-        String subject = "Benvenuto " + registeredUser.getName() + "!";
-        String body = "Ciao " + registeredUser.getName() + ",\n\n" +
-                "Grazie per esserti registrato nella nostra piattaforma! Il tuo account è stato creato con successo.\n\n" +
-                "Cordiali saluti,\nIl Team";
+        //Invia una email di conferma all'utente
+        sendConfirmationEmail(registerUser);
 
-        emailService.sendEmail(registeredUser.getEmail(), subject, body);
+        return registeredUser;
+        }
 
-        return registerUserRepository.save(registeredUser);
+        private void sendConfirmationEmail(RegisterUser registerUser){
+            String subject = "Benvenuto " + registerUser.getName() + "!";
+            String body = "Ciao " + registerUser.getName() + ",\n\n" + 
+            "Grazie per esserti registrato nella nostra piattaforma! \n" +
+            "tuo account è stato creato con successo. \n\n" + 
+            "Cordiali saluti, \n Il team";
 
-    }
+            emailService.sendEmail(registerUser.getEmail(), subject, body);
+        }
 }
